@@ -17,10 +17,38 @@
 #include <util/delay.h>
 #include <stdint.h>
 
+#define     F_CPU                       8000000UL // Assume CPU runs at 8mhz
+#define     BAUD_RATE                   9600
+#define     BAUD_RATE_REGISTER_VALUE    ((F_CPU / ( 16UL * BAUD_RATE)) - 1)
+
+/* USART0_init(void)
+ * Initializes the USART functionality on the ATMega328.
+ */
+void USART0_init(void)
+{
+    /* Set baud rate. TODO better comment here */
+    UBRR0L = BAUD_RATE_REGISTER_VALUE;
+    UBRR0H = BAUD_RATE_REGISTER_VALUE >> 8;
+
+    /* ENable transmission and receive functionality.
+     * On the ATMega328, the RXD and TXD are pins PD0 and PD1, respectively.
+     */
+    UCSR0B = (1 << RXEN0) | (1 << TXEN0);
+
+    /* UCSZ00 and UCSZ01 set the USART Character SiZe to 8 bits.
+     * That is, there are 8 bits of data in each TX/RX frame.
+     */
+    UCSR0C = (1 << UCSZ00) | (1 << UCSZ01);
+
+}
 
 
 /* Either of these values are written to bits 0:3 of the ADMUX
+ * TODO better comment.
  * register when reading from the ADC.
+ *
+ * The U/D output of the joystick is connected to pin 23, or ADC0, on the ATMega328.
+ * The L/R output of the joystick is connected to pin 24, or ADC1, on the ATMega328.
  */
 #define     ADC_CHANNEL_SERVO              0x00
 #define     ADC_CHANNEL_STEPPER_MOTOR      0x01
@@ -36,21 +64,6 @@
 #define     JOYSTICK_UD_EQUILIBRIUM_VALUE   127
 
 
-
-void timers_on(void)
-{
-    /* Here we set up Timer/Counter1 in Mode 14. 
-     */
-    TCNT1  = 0; // Clear the timer.
-    
-    /* This is the TOP value for T/C1 in mode 14.u */
-    ICR1   = 2499;
-    TCCR1A = (1 << COM1A1) | (1 << WGM11);
-    TCCR1B = (1 << WGM13)  | (1 << WGM12) | (1 << CS11) | (1 << CS10);
-}
-
-
-
 void ADC_init(void)
 {
     ADMUX  |= (1 << ADLAR);
@@ -58,7 +71,7 @@ void ADC_init(void)
     ADCSRA |= (1 << ADEN) | (1 << ADSC) | (1 << ADATE) | (1 << ADPS2) | (1 << ADPS1);
 }
 
-/*
+/* uint8_t ADC_read(uint8_t ADCx)
  * DESCRIPTION: Read the value on ADC pins 0:5 (pins 23:28 on the ATMega328).
  *
  * INPUTS:
@@ -92,7 +105,7 @@ uint8_t ADC_read(uint8_t ADCx)
     return ADCH;
 }
 
-/*
+/* uint8_t joystick_to_servo(uint8_t joystick_value)
  * DESCRIPTION: Arbitrary mapping for joystick position to servo position.
  *              Min/max values from joystick are 0/255, respectively (8 bit precision
  *              because we're only reading from left aligned ADCH). Arbitrary min/max
@@ -147,21 +160,34 @@ uint8_t joystick_to_servo(uint8_t joystick_value)
 }
 
 
+
 int main(void)
 {
     ADC_init();
-    timers_on();
 
-    DDRD = 0xFF; // For ADC outpt to LEDs.
+    USART0_init();
 
-    uint8_t tmpADC;
+    DDRD  &= ~(1 << PD3); // Set PD3 to input.
+    PORTD |=  (1 << PD3); // Enable internal pull-up resistor.
+    DDRD  |=  (1 << PD4); // Set PD4 to ouput.
+
+    uint8_t tmpADC, tmpD;
 
     while(1)
     {
+        /*
         tmpADC = ADC_read(ADC_CHANNEL_STEPPER_MOTOR);
-        PORTD  = tmpADC;
+        // PORTD  = tmpADC;
         tmpADC = ADC_read(ADC_CHANNEL_SERVO);
-
+        */
+        tmpD = (~(PIND) & 0x08);
+        if(tmpD)
+        {
+            while( !(UCSR0A & (1 << UDRE0)));
+            UDR0 = 0xAA;
+            _delay_ms(100);
+            PORTD ^= (1 << PD4);
+        }
     }
 
     return 0;   /* never reached */
