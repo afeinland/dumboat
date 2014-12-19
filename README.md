@@ -1,0 +1,1 @@
+##### This is a simple remote controlled boat. An ATMega328, 2-axis joystick, and an XBee radio make up the controller. The boat consists of an ATMega1284p, stepper motor, servo, and a second XBee radio.
