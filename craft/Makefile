@@ -23,7 +23,7 @@ PROGRAMMER  = -c avrispv2 -P usb #-c stk500v2 -P avrdoper
 OBJECTS     = main.o timer.o 28BYJ-48.o servo.o usart.o
 FUSES       = -U lfuse:w:0xc2:m -U hfuse:w:0xd9:m -U efuse:w:0xff:m
 INCLUDE     = -I ./include -I ../include
-VPATH       = ../
+VPATH       = ../src
 # For computing fuse byte values for other devices and options see
 # the fuse bit calculator at http://www.engbedded.com/fusecalc/
 
