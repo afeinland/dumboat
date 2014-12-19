@@ -20,7 +20,7 @@
 DEVICE      = atmega328
 CLOCK       = 8000000
 PROGRAMMER  = -c avrispv2 -P usb #-c stk500v2 -P avrdoper
-OBJECTS     = main.o
+OBJECTS     = main.o usart.o
 FUSES       = -U lfuse:w:0xe2:m -U hfuse:w:0xd9:m -U efuse:w:0x07:m
 INCLUDE     = -I ./include -I ../include
 VPATH       = ../

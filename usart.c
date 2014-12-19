@@ -37,7 +37,7 @@ void USART0_init(void)
 uint8_t USART0_rx_byte(void)
 {
     // Wait for data rx (one byte).
-    while(UCSR0A & (1 << RXC0))
+    while( !(UCSR0A & (1 << RXC0)))
         ;
 
     return UDR0;

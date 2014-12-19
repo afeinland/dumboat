@@ -20,7 +20,7 @@
 DEVICE      = atmega1284p
 CLOCK       = 8000000
 PROGRAMMER  = -c avrispv2 -P usb #-c stk500v2 -P avrdoper
-OBJECTS     = main.o timer.o 28BYJ-48.o servo.o
+OBJECTS     = main.o timer.o 28BYJ-48.o servo.o usart.o
 FUSES       = -U lfuse:w:0xc2:m -U hfuse:w:0xd9:m -U efuse:w:0xff:m
 INCLUDE     = -I ./include -I ../include
 VPATH       = ../

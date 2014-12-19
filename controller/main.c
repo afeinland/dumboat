@@ -17,30 +17,8 @@
 #include <util/delay.h>
 #include <stdint.h>
 
-#define     F_CPU                       8000000UL // Assume CPU runs at 8mhz
-#define     BAUD_RATE                   9600
-#define     BAUD_RATE_REGISTER_VALUE    ((F_CPU / ( 16UL * BAUD_RATE)) - 1)
-
-/* USART0_init(void)
- * Initializes the USART functionality on the ATMega328.
- */
-void USART0_init(void)
-{
-    /* Set baud rate. TODO better comment here */
-    UBRR0L = BAUD_RATE_REGISTER_VALUE;
-    UBRR0H = BAUD_RATE_REGISTER_VALUE >> 8;
-
-    /* ENable transmission and receive functionality.
-     * On the ATMega328, the RXD and TXD are pins PD0 and PD1, respectively.
-     */
-    UCSR0B = (1 << RXEN0) | (1 << TXEN0);
-
-    /* UCSZ00 and UCSZ01 set the USART Character SiZe to 8 bits.
-     * That is, there are 8 bits of data in each TX/RX frame.
-     */
-    UCSR0C = (1 << UCSZ00) | (1 << UCSZ01);
-
-}
+#include "usart.h"
+#include "28BYJ-48.h"
 
 
 /* Either of these values are written to bits 0:3 of the ADMUX
@@ -52,6 +30,7 @@ void USART0_init(void)
  */
 #define     ADC_CHANNEL_SERVO              0x00
 #define     ADC_CHANNEL_STEPPER_MOTOR      0x01
+
 
 /* The up/down (UD) channel on the joystick controls the servo, which in turn steers the boat.
  * The left/right (LR) channel controls the motor, which makes the boat go forward.
@@ -66,10 +45,20 @@ void USART0_init(void)
 
 void ADC_init(void)
 {
+    // Setting the ADc Left Align Result bit left aligns the 10 bit ouput within ADCH and ADCL.
     ADMUX  |= (1 << ADLAR);
+
+    // Disable the digital inputs on the pins used by the ADC.
     DIDR0   = 0x3F;
+
+    /* ADEN enables the ADC
+     * ADSC starts the conversion process, leaving the ADC in free running mode.
+     * ADATE enables auto triggering on the ADC.
+     * ADPS2 and ADPS1 set the ADC prescaler to 64. With an 8mhz clock, this results
+     *  in a sample rate of 125khz. The ideal range is betwen 50khz and 200khz. */
     ADCSRA |= (1 << ADEN) | (1 << ADSC) | (1 << ADATE) | (1 << ADPS2) | (1 << ADPS1);
 }
+
 
 /* uint8_t ADC_read(uint8_t ADCx)
  * DESCRIPTION: Read the value on ADC pins 0:5 (pins 23:28 on the ATMega328).
@@ -104,6 +93,33 @@ uint8_t ADC_read(uint8_t ADCx)
 
     return ADCH;
 }
+
+
+/* uint8_t joystick_to_motor(uint8_t joystick_value)
+ * DESCRIPTION: Arbitrary mapping for joystick position to servo position.
+ *
+ * INPUTS:
+ *      PARAMETERS:
+ *          uint8_t     joystick_value      The 8-bit value output from the ADC.
+ *
+ * OUTPUTS:
+ *      RETURN:
+ *          uint8_t     motor_value         This is the message sent to the craft
+ *                                          instructing it to turn on or off the motor.
+ *
+ * NOTES:
+ */
+ uint8_t joystick_to_motor(uint8_t joystick_value)
+ {
+    uint8_t motor_value = STEPPER_MOTOR_OFF;
+
+    if(joystick_value > 130)            /* 130 is approx. neutral position on the joystick, */
+    {                                   /* so if the value read is > 130, that means we're  */
+        motor_value = STEPPER_MOTOR_ON; /* shoving the joystick forward. */
+    }
+     return motor_value;
+ }
+
 
 /* uint8_t joystick_to_servo(uint8_t joystick_value)
  * DESCRIPTION: Arbitrary mapping for joystick position to servo position.
@@ -164,30 +180,41 @@ uint8_t joystick_to_servo(uint8_t joystick_value)
 int main(void)
 {
     ADC_init();
-
     USART0_init();
 
-    DDRD  &= ~(1 << PD3); // Set PD3 to input.
-    PORTD |=  (1 << PD3); // Enable internal pull-up resistor.
-    DDRD  |=  (1 << PD4); // Set PD4 to ouput.
 
-    uint8_t tmpADC, tmpD;
+    uint8_t servo_value      = 0; // Holds the value read from the U/D channel of the joystick.
+    uint8_t prev_servo_value = 0; // Holds the previous U/D value read.
+    uint8_t motor_value      = 0; // Holds the value read from the L/R channel if the joystick.
+    uint8_t prev_motor_value = 0; // Holds the previous L/R value read.
+
 
     while(1)
     {
-        /*
-        tmpADC = ADC_read(ADC_CHANNEL_STEPPER_MOTOR);
-        // PORTD  = tmpADC;
-        tmpADC = ADC_read(ADC_CHANNEL_SERVO);
-        */
-        tmpD = (~(PIND) & 0x08);
-        if(tmpD)
+        // Read U/D value from joystick.
+        servo_value = joystick_to_servo( ADC_read(ADC_CHANNEL_SERVO) );
+
+        // If the U/D value has changed, send the corresponding servo position.
+        if(servo_value != prev_servo_value)
         {
-            while( !(UCSR0A & (1 << UDRE0)));
-            UDR0 = 0xAA;
-            _delay_ms(100);
-            PORTD ^= (1 << PD4);
+            USART0_tx_byte(servo_value);
         }
+
+        // Store the U/D value that was just recorded.
+        prev_servo_value = servo_value;
+
+
+        // Read the L/R value from joystick.
+        motor_value = joystick_to_motor( ADC_read(ADC_CHANNEL_STEPPER_MOTOR) );
+
+        // If the L/R value has changed, send the new message.
+        if(motor_value != prev_motor_value)
+        {
+            USART0_tx_byte(motor_value);
+        }
+
+        // Store the L/R value that was just recorded.
+        prev_motor_value = motor_value;
     }
 
     return 0;   /* never reached */

@@ -4,7 +4,11 @@
  * the 28BYJ-48 stepper motor on the ATmega1284p.
  */
 
+#include <avr/io.h>
 #include "28BYJ-48.h"
+
+/* This variable is checked in ISR(TIMER3_COMPA_vect) to determine
+ * whether the motor should be moving or not. */
 
 /* The sequence of steps for the motor. */
 const uint8_t steps[8] = {STEP_A, STEP_AB, STEP_B, STEP_BC, STEP_C, STEP_CD, STEP_D};
